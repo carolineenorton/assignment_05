@@ -1,7 +1,1 @@
-Write your reflection here.
-
-See reflection.md for what makes a good reflection — be specific, use the
-terminology from this assignment (grain, long vs. wide, vectorized .str methods,
-coerce, NaT, pd.to_datetime format, .dt, concat, ignore_index, group by, named
-aggregation, reset_index, pivot_table, fill_value, melt, lineage), and make it
-actionable.
+This assignment helped me understand how changing the grain makes the same payroll data useful for different reports. A group by with named aggregation gives one row per employee, while pivot_table changes the data from long to wide to show hours by week. I struggled with reset_index because I did not realize the employee names and IDs were still in the index. Using fill_value=0 and melt helped me find missed weeks that were not actual rows in the exports. I also practiced vectorized .str methods, explicit pd.to_datetime formats, and errors="coerce", which turns invalid dates into NaT. The .dt accessor let me create week and month labels, and concat with ignore_index=True combined the exports. Keeping raw columns and adding clean ones preserved lineage. Next time, I will check the columns and index after each reshape and practice with a small table before using the full dataset.
