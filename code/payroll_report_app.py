@@ -44,3 +44,128 @@ Test it: pytest tests/test_pipeline.py -k app
 #
 # What the page does NOT do: cleaning, grouping, pivoting. If you find yourself
 # writing a groupby or a pivot_table here, that logic belongs in the package.
+
+import streamlit as st
+
+from payroll import (
+    load_employees,
+    load_export,
+    build_history,
+    pay_by_month,
+    summarize_employees,
+    hours_grid,
+    missed_weeks,
+)
+
+
+def main():
+    """Show quarterly payroll reports with department and date filters."""
+    st.title("Salt City Coffee — Quarterly Payroll Report")
+    st.write(
+        "Upload payroll exports, then choose a department and date range "
+        "to view hours, pay, and attendance."
+    )
+
+    roster = load_employees()
+
+    uploads = st.file_uploader(
+        "Upload payroll exports",
+        accept_multiple_files=True,
+        key="exports",
+    )
+
+    if not uploads:
+        return
+
+    history = build_history(
+        [load_export(upload) for upload in uploads],
+        roster,
+    )
+
+    missing = history["department"].isna()
+
+    if missing.any():
+        employee_ids = history.loc[missing, "employeeid"].unique()
+        st.warning(
+            "Employees not found on the roster: "
+            + ", ".join(str(value) for value in employee_ids)
+        )
+
+    history = history.loc[~missing].copy()
+
+    if history.empty or history["pay_date"].notna().sum() == 0:
+        st.info("No roster-matched records with valid pay dates.")
+        return
+
+    department = st.selectbox(
+        "Department",
+        ["All"] + sorted(history["department"].unique()),
+        key="department",
+    )
+
+    dates = st.date_input(
+        "Date range",
+        value=(
+            history["pay_date"].min().date(),
+            history["pay_date"].max().date(),
+        ),
+        key="dates",
+    )
+
+    if len(dates) != 2:
+        st.info("Select a start date and an end date.")
+        return
+
+    start_date, end_date = dates
+    pay_dates = history["pay_date"].dt.date
+
+    selected = history.loc[
+        (pay_dates >= start_date) & (pay_dates <= end_date)
+    ].copy()
+
+    if department != "All":
+        selected = selected.loc[
+            selected["department"] == department
+        ].copy()
+
+    st.subheader(f"{department}: {start_date} to {end_date}")
+
+    columns = st.columns(4)
+
+    columns[0].metric(
+        "Weeks",
+        selected["week_ending"].nunique(),
+    )
+    columns[1].metric(
+        "Employees",
+        selected["employee_id"].nunique(),
+    )
+    columns[2].metric(
+        "Total hours",
+        f"{selected['hours_worked'].sum():,.2f}",
+    )
+    columns[3].metric(
+        "Total gross pay",
+        f"${selected['gross_pay'].sum():,.2f}",
+    )
+
+    monthly = pay_by_month(selected)
+    st.bar_chart(monthly, x="month")
+
+    st.dataframe(summarize_employees(selected))
+
+    grid = hours_grid(selected)
+    st.dataframe(grid)
+    st.dataframe(missed_weeks(grid))
+
+    st.download_button(
+        "Download monthly pay report",
+        data=monthly.to_csv(index=False),
+        file_name="monthly_pay.csv",
+        mime="text/csv",
+        key="download",
+    )
+
+
+if __name__ == "__main__":
+    main()
